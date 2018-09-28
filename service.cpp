@@ -20,17 +20,16 @@
 
 // libutils:
 using android::sp;
-using android::status_t;
+using android::Looper;
+using android::LooperCallback;
 
 // libhwbinder:
 using android::hardware::IPCThreadState;
 using android::hardware::ProcessState;
 
 // libhidl
-using android::hardware::configureRpcThreadpool;
-using android::hardware::hidl_string;
-using android::hardware::hidl_vec;
-using android::hardware::joinRpcThreadpool;
+using android::hardware::handleTransportPoll;
+using android::hardware::setupTransportPolling;
 
 // hidl types
 using android::hidl::manager::V1_1::BnHwServiceManager;
@@ -42,9 +41,35 @@ using android::hidl::token::V1_0::implementation::TokenManager;
 
 static std::string serviceName = "default";
 
-int main() {
-    configureRpcThreadpool(1, true /* callerWillJoin */);
+class HwBinderCallback : public LooperCallback {
+public:
+    static sp<HwBinderCallback> setupTo(const sp<Looper>& looper) {
+        sp<HwBinderCallback> cb = new HwBinderCallback;
 
+        int fdHwBinder = setupTransportPolling();
+        LOG_ALWAYS_FATAL_IF(fdHwBinder < 0, "Failed to setupTransportPolling: %d", fdHwBinder);
+
+        // Flush after setupPolling(), to make sure the binder driver
+        // knows about this thread handling commands.
+        IPCThreadState::self()->flushCommands();
+
+        int ret = looper->addFd(fdHwBinder,
+                                Looper::POLL_CALLBACK,
+                                Looper::EVENT_INPUT,
+                                cb,
+                                nullptr /*data*/);
+        LOG_ALWAYS_FATAL_IF(ret != 1, "Failed to add binder FD to Looper");
+
+        return cb;
+    }
+
+    int handleEvent(int fd, int /*events*/, void* /*data*/) override {
+        handleTransportPoll(fd);
+        return 1;  // Continue receiving callbacks.
+    }
+};
+
+int main() {
     ServiceManager *manager = new ServiceManager();
 
     if (!manager->add(serviceName, manager)) {
@@ -69,8 +94,15 @@ int main() {
               "HAL services will not start!\n", rc);
     }
 
+    sp<Looper> looper = Looper::prepare(0 /* opts */);
+
+    (void)HwBinderCallback::setupTo(looper);
+
     ALOGI("hwservicemanager is ready now.");
-    joinRpcThreadpool();
+
+    while (true) {
+        looper->pollAll(-1 /* timeoutMillis */);
+    }
 
     return 0;
 }
