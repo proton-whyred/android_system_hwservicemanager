@@ -4,6 +4,7 @@
 
 #include <inttypes.h>
 #include <unistd.h>
+#include <sys/timerfd.h>
 
 #include <android/hidl/manager/1.1/BnHwServiceManager.h>
 #include <android/hidl/token/1.0/ITokenManager.h>
@@ -33,7 +34,6 @@ using android::hardware::setupTransportPolling;
 
 // hidl types
 using android::hidl::manager::V1_1::BnHwServiceManager;
-using android::hidl::token::V1_0::ITokenManager;
 
 // implementations
 using android::hidl::manager::implementation::ServiceManager;
@@ -69,15 +69,61 @@ public:
     }
 };
 
-int main() {
-    ServiceManager *manager = new ServiceManager();
+// LooperCallback for IClientCallback
+class ClientCallbackCallback : public LooperCallback {
+public:
+    static sp<ClientCallbackCallback> setupTo(const sp<Looper>& looper, const sp<ServiceManager>& manager) {
+        sp<ClientCallbackCallback> cb = new ClientCallbackCallback(manager);
 
+        int fdTimer = timerfd_create(CLOCK_MONOTONIC, 0 /*flags*/);
+        LOG_ALWAYS_FATAL_IF(fdTimer < 0, "Failed to timerfd_create: fd: %d err: %d", fdTimer, errno);
+
+        itimerspec timespec {
+            .it_interval = {
+                .tv_sec = 5,
+                .tv_nsec = 0,
+            },
+            .it_value = {
+                .tv_sec = 5,
+                .tv_nsec = 0,
+            },
+        };
+
+        int timeRes = timerfd_settime(fdTimer, 0 /*flags*/, &timespec, nullptr);
+        LOG_ALWAYS_FATAL_IF(timeRes < 0, "Failed to timerfd_settime: res: %d err: %d", timeRes, errno);
+
+        int addRes = looper->addFd(fdTimer,
+                                   Looper::POLL_CALLBACK,
+                                   Looper::EVENT_INPUT,
+                                   cb,
+                                   nullptr);
+        LOG_ALWAYS_FATAL_IF(addRes != 1, "Failed to add client callback FD to Looper");
+
+        return cb;
+    }
+
+    int handleEvent(int fd, int /*events*/, void* /*data*/) override {
+        uint64_t expirations;
+        int ret = read(fd, &expirations, sizeof(expirations));
+        if (ret != sizeof(expirations)) {
+            ALOGE("Read failed to callback FD: ret: %d err: %d", ret, errno);
+        }
+
+        mManager->handleClientCallbacks();
+        return 1;  // Continue receiving callbacks.
+    }
+private:
+    ClientCallbackCallback(const sp<ServiceManager>& manager) : mManager(manager) {}
+    sp<ServiceManager> mManager;
+};
+
+int main() {
+    sp<ServiceManager> manager = new ServiceManager();
     if (!manager->add(serviceName, manager)) {
         ALOGE("Failed to register hwservicemanager with itself.");
     }
 
-    TokenManager *tokenManager = new TokenManager();
-
+    sp<TokenManager> tokenManager = new TokenManager();
     if (!manager->add(serviceName, tokenManager)) {
         ALOGE("Failed to register ITokenManager with hwservicemanager.");
     }
@@ -97,6 +143,7 @@ int main() {
     sp<Looper> looper = Looper::prepare(0 /* opts */);
 
     (void)HwBinderCallback::setupTo(looper);
+    (void)ClientCallbackCallback::setupTo(looper, manager);
 
     ALOGI("hwservicemanager is ready now.");
 
