@@ -387,8 +387,8 @@ Return<bool> ServiceManager::registerForNotifications(const hidl_string& fqName,
     PackageInterfaceMap &ifaceMap = mServiceMap[fqName];
 
     if (name.empty()) {
-        auto ret = callback->linkToDeath(this, kPackageListenerDiedCookie);
-        if (!ret.isOk()) {
+        bool ret = callback->linkToDeath(this, kPackageListenerDiedCookie).withDefault(false);
+        if (!ret) {
             LOG(ERROR) << "Failed to register death recipient for " << fqName << "/" << name;
             return false;
         }
@@ -398,8 +398,8 @@ Return<bool> ServiceManager::registerForNotifications(const hidl_string& fqName,
 
     HidlService *service = ifaceMap.lookup(name);
 
-    auto ret = callback->linkToDeath(this, kServiceListenerDiedCookie);
-    if (!ret.isOk()) {
+    bool ret = callback->linkToDeath(this, kServiceListenerDiedCookie).withDefault(false);
+    if (!ret) {
         LOG(ERROR) << "Failed to register death recipient for " << fqName << "/" << name;
         return false;
     }
