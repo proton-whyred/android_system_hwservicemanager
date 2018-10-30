@@ -4,7 +4,6 @@
 #include "Vintf.h"
 
 #include <android-base/logging.h>
-#include <hidl-util/FQName.h>
 #include <vintf/parse_string.h>
 #include <vintf/VintfObject.h>
 
@@ -27,7 +26,7 @@ vintf::Transport getTransport(const std::string &interfaceName, const std::strin
 
     if (!FQName::parse(interfaceName, &fqName)) {
         LOG(ERROR) << __FUNCTION__ << ": " << interfaceName
-                   << " is not a valid fully-qualified name ";
+                   << " is not a valid fully-qualified name.";
         return vintf::Transport::EMPTY;
     }
     if (!fqName.hasVersion()) {
@@ -57,6 +56,34 @@ vintf::Transport getTransport(const std::string &interfaceName, const std::strin
                  << " in either framework or device manifest.";
     return vintf::Transport::EMPTY;
 }
+
+std::set<std::string> getInstances(const std::string& interfaceName) {
+    FQName fqName;
+    if (!FQName::parse(interfaceName, &fqName) || !fqName.isFullyQualified() ||
+            fqName.isValidValueName() || !fqName.isInterfaceName()) {
+        LOG(ERROR) << __FUNCTION__ << ": " << interfaceName
+                   << " is not a valid fully-qualified name.";
+        return {};
+    }
+
+    std::set<std::string> ret;
+
+    auto deviceManifest = vintf::VintfObject::GetDeviceHalManifest();
+    auto frameworkManifest = vintf::VintfObject::GetFrameworkHalManifest();
+
+    vintf::Version version = {fqName.getPackageMajorVersion(), fqName.getPackageMinorVersion()};
+
+    std::set<std::string> deviceSet =
+        deviceManifest->getInstances(fqName.package(), version, fqName.name());
+    std::set<std::string> frameworkSet =
+        frameworkManifest->getInstances(fqName.package(), version, fqName.name());
+
+    ret.insert(deviceSet.begin(), deviceSet.end());
+    ret.insert(frameworkSet.begin(), frameworkSet.end());
+
+    return ret;
+}
+
 
 }  // hardware
 }  // android
