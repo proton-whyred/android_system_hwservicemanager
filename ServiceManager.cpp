@@ -252,7 +252,7 @@ Return<sp<IBase>> ServiceManager::get(const hidl_string& hidlFqName,
     // time. This will run before anything else can modify the HidlService which is owned by this
     // object, so it will be in the same state that it was when this function returns.
     hardware::addPostCommandTask([hidlService] {
-        hidlService->handleClientCallbacks();
+        hidlService->handleClientCallbacks(false /* isCalledOnInterval */);
     });
 
     return service;
@@ -534,7 +534,7 @@ Return<bool> ServiceManager::registerClientCallback(const sp<IBase>& server,
     }
 
     if (registered != nullptr) {
-        registered->handleClientCallbacks();
+        registered->handleClientCallbacks(false /* isCalledOnInterval */);
     }
 
     return registered != nullptr;
@@ -558,7 +558,7 @@ Return<bool> ServiceManager::unregisterClientCallback(const sp<IBase>& server,
 
 void ServiceManager::handleClientCallbacks() {
     forEachServiceEntry([&] (HidlService *service) {
-        service->handleClientCallbacks();
+        service->handleClientCallbacks(true /* isCalledOnInterval */);
         return true;  // continue
     });
 }
