@@ -52,7 +52,7 @@ void HidlService::setService(sp<IBase> service, pid_t pid) {
     mClientCallbacks.clear();
     mHasClients = false;
     mGuaranteeClient = false;
-    mNoClientsCounter = false;
+    mNoClientsCounter = 0;
 
     sendRegistrationNotifications();
 }
@@ -131,21 +131,30 @@ ssize_t HidlService::handleClientCallbacks(bool isCalledOnInterval) {
 
     bool hasClients = count > 1; // this process holds a strong count
 
-    // a client has its first client OR a handle was handed out, but it was immediately dropped
-    if ((hasClients && !mHasClients) || (mGuaranteeClient && !hasClients)) {
-        sendClientCallbackNotifications(true); // for first ref, or for when we handed it out
+    if (mGuaranteeClient) {
+        // we have no record of this client
+        if (!mHasClients && !hasClients) {
+            sendClientCallbackNotifications(true);
+        }
+
+        // guarantee is temporary
+        mGuaranteeClient = false;
+    }
+
+    if (hasClients && !mHasClients) {
+        // client was retrieved in some other way
+        sendClientCallbackNotifications(true);
     }
 
     // there are no more clients, but the callback has not been called yet
-    if (isCalledOnInterval && !hasClients && mHasClients) {
+    if (!hasClients && mHasClients && isCalledOnInterval) {
         mNoClientsCounter++;
+
+        if (mNoClientsCounter >= kNoClientRepeatLimit) {
+            sendClientCallbackNotifications(false);
+        }
     }
 
-    if (mNoClientsCounter >= kNoClientRepeatLimit) {
-        sendClientCallbackNotifications(false);
-    }
-
-    mGuaranteeClient = false;
     return count;
 }
 
@@ -197,6 +206,9 @@ void HidlService::sendRegistrationNotifications() {
 }
 
 void HidlService::sendClientCallbackNotifications(bool hasClients) {
+    CHECK(hasClients != mHasClients) << "Record shows: " << mHasClients
+        << " so we can't tell clients again that we have client: " << hasClients;
+
     LOG(INFO) << "Notifying " << string() << " they have clients: " << hasClients;
 
     for (const auto& cb : mClientCallbacks) {
