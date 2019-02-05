@@ -67,6 +67,7 @@ struct HidlService {
     bool removeListener(const wp<IBase> &listener);
     void registerPassthroughClient(pid_t pid);
 
+    // also sends onClients(true) if we have clients
     void addClientCallback(const sp<IClientCallback>& callback);
     bool removeClientCallback(const sp<IClientCallback>& callback);
 
@@ -86,7 +87,12 @@ protected:
 
 private:
     void sendRegistrationNotifications();
+
+    // Also updates mHasClients (of what the last callback was)
     void sendClientCallbackNotifications(bool hasClients);
+
+    // Only sends notification
+    void sendClientCallbackNotification(const sp<IClientCallback>& callback, bool hasClients);
 
     const std::string                     mInterfaceName; // e.x. "android.hidl.manager@1.0::IServiceManager"
     const std::string                     mInstanceName;  // e.x. "manager"

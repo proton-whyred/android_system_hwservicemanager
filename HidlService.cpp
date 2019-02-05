@@ -105,6 +105,12 @@ const std::set<pid_t> &HidlService::getPassthroughClients() const {
 }
 
 void HidlService::addClientCallback(const sp<IClientCallback>& callback) {
+    handleClientCallbacks(false /* isCalledOnInterval */);
+
+    if (mHasClients) {
+        sendClientCallbackNotification(callback, true /*hasClients*/);
+    }
+
     mClientCallbacks.push_back(callback);
 }
 
@@ -212,14 +218,18 @@ void HidlService::sendClientCallbackNotifications(bool hasClients) {
     LOG(INFO) << "Notifying " << string() << " they have clients: " << hasClients;
 
     for (const auto& cb : mClientCallbacks) {
-        Return<void> ret = cb->onClients(getService(), hasClients);
-        if (!ret.isOk()) {
-            LOG(WARNING) << "onClients callback failed for " << string() << ": " << ret.description();
-        }
+        sendClientCallbackNotification(cb, hasClients);
     }
 
     mNoClientsCounter = 0;
     mHasClients = hasClients;
+}
+
+void HidlService::sendClientCallbackNotification(const sp<IClientCallback>& callback, bool hasClients) {
+    Return<void> ret = callback->onClients(getService(), hasClients);
+    if (!ret.isOk()) {
+        LOG(WARNING) << "onClients callback failed for " << string() << ": " << ret.description();
+    }
 }
 
 

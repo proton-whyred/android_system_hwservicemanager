@@ -170,3 +170,30 @@ TEST_F(HidlServiceLazyTest, AcquisitionAfterGuarantee) {
     service->handleClientCallbacks(true /*onInterval*/);
     ASSERT_THAT(cb->stream, ElementsAre(true, false)); // reported only after two intervals
 }
+
+TEST_F(HidlServiceLazyTest, NotificationSentForNewClientCallback) {
+    sp<RecordingClientCallback> cb = new RecordingClientCallback;
+
+    std::unique_ptr<HidlService> service = makeService();
+    service->addClientCallback(cb);
+
+    setReportedClientCount(2);
+    service->handleClientCallbacks(false /*onInterval*/);
+    ASSERT_THAT(cb->stream, ElementsAre(true));
+
+    sp<RecordingClientCallback> laterCb = new RecordingClientCallback;
+    service->addClientCallback(laterCb);
+
+    ASSERT_THAT(cb->stream, ElementsAre(true));
+    ASSERT_THAT(laterCb->stream, ElementsAre(true));
+
+    setReportedClientCount(1);
+
+    service->handleClientCallbacks(true /*onInterval*/);
+    ASSERT_THAT(cb->stream, ElementsAre(true));
+    ASSERT_THAT(laterCb->stream, ElementsAre(true));
+
+    service->handleClientCallbacks(true /*onInterval*/);
+    ASSERT_THAT(cb->stream, ElementsAre(true, false)); // reported only after two intervals
+    ASSERT_THAT(laterCb->stream, ElementsAre(true, false)); // reported only after two intervals
+}
