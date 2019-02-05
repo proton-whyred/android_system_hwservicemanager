@@ -51,6 +51,7 @@ struct HidlService {
         nullptr,
         static_cast<pid_t>(IServiceManager::PidConstant::NO_PID))
     {}
+    virtual ~HidlService() {}
 
     /**
      * Note, getService() can be nullptr. This is because you can have a HidlService
@@ -78,6 +79,10 @@ struct HidlService {
 
     std::string string() const; // e.x. "android.hidl.manager@1.0::IServiceManager/manager"
     const std::set<pid_t> &getPassthroughClients() const;
+
+protected:
+    // mockable number of clients including hwservicemanager. -1 if not implemented or unavailable.
+    virtual ssize_t getNodeStrongRefCount();
 
 private:
     void sendRegistrationNotifications();
