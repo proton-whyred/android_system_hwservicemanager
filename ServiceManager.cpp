@@ -565,7 +565,6 @@ Return<bool> ServiceManager::registerClientCallback(const hidl_string& hidlFqNam
     }
 
     registered->addClientCallback(cb);
-    registered->handleClientCallbacks(false /* isCalledOnInterval */);
 
     return true;
 }
