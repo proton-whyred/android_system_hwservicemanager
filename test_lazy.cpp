@@ -51,21 +51,32 @@ public:
     // Note that this should include one count for hwservicemanager. A count of
     // 1 indicates that hwservicemanager is the only process holding the service.
     void setReportedClientCount(ssize_t count) {
-        mInjectedReportCount = count;
+        mState.mInjectedReportCount = count;
+    }
+
+    // Essentially, the number of times the kernel API would be called
+    size_t getNumTimesReported() {
+        return mState.mInjectedTimes;
     }
 
     std::unique_ptr<HidlService> makeService() {
         auto service = std::make_unique<NiceMock<MockHidlService>>();
-        ON_CALL(*service, getNodeStrongRefCount()).WillByDefault(Invoke([&]() { return mInjectedReportCount; }));
+        ON_CALL(*service, getNodeStrongRefCount()).WillByDefault(Invoke([&]() {
+            mState.mInjectedTimes++;
+            return mState.mInjectedReportCount;
+        }));
         return service;
     }
 
 protected:
     void SetUp() override {
-        mInjectedReportCount = -1;
+        mState = TestState();
     }
 
-    ssize_t mInjectedReportCount = -1;
+    struct TestState {
+        ssize_t mInjectedReportCount = -1;
+        size_t mInjectedTimes = 0;
+    } mState;
 };
 
 TEST_F(HidlServiceLazyTest, NoChange) {
@@ -196,4 +207,14 @@ TEST_F(HidlServiceLazyTest, NotificationSentForNewClientCallback) {
     service->handleClientCallbacks(true /*onInterval*/);
     ASSERT_THAT(cb->stream, ElementsAre(true, false)); // reported only after two intervals
     ASSERT_THAT(laterCb->stream, ElementsAre(true, false)); // reported only after two intervals
+}
+
+TEST_F(HidlServiceLazyTest, ClientWithoutLazy) {
+    std::unique_ptr<HidlService> service = makeService();
+
+    setReportedClientCount(2);
+    service->handleClientCallbacks(false /*onInterval*/);
+
+    // kernel API should not be called
+    EXPECT_EQ(0u, getNumTimesReported());
 }

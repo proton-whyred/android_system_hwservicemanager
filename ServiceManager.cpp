@@ -659,7 +659,7 @@ Return<bool> ServiceManager::tryUnregister(const hidl_string& hidlFqName,
         return false;
     }
 
-    int clients = registered->handleClientCallbacks(false /* isCalledOnInterval */);
+    int clients = registered->forceHandleClientCallbacks(false /* isCalledOnInterval */);
 
     // clients < 0: feature not implemented or other error. Assume clients.
     // Otherwise:

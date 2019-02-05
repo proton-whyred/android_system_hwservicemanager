@@ -105,9 +105,13 @@ const std::set<pid_t> &HidlService::getPassthroughClients() const {
 }
 
 void HidlService::addClientCallback(const sp<IClientCallback>& callback) {
-    handleClientCallbacks(false /* isCalledOnInterval */);
+    if (mHasClients) {
+        // we have this kernel feature, so make sure we're in an updated state
+        forceHandleClientCallbacks(false /*onInterval*/);
+    }
 
     if (mHasClients) {
+        // make sure this callback is in the same state as all of the rest
         sendClientCallbackNotification(callback, true /*hasClients*/);
     }
 
@@ -130,6 +134,14 @@ bool HidlService::removeClientCallback(const sp<IClientCallback>& callback) {
 }
 
 ssize_t HidlService::handleClientCallbacks(bool isCalledOnInterval) {
+    if (!mClientCallbacks.empty()) {
+        return forceHandleClientCallbacks(isCalledOnInterval);
+    }
+
+    return -1;
+}
+
+ssize_t HidlService::forceHandleClientCallbacks(bool isCalledOnInterval) {
     ssize_t count = getNodeStrongRefCount();
 
     // binder driver doesn't support this feature
