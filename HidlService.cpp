@@ -124,20 +124,7 @@ bool HidlService::removeClientCallback(const sp<IClientCallback>& callback) {
 }
 
 ssize_t HidlService::handleClientCallbacks(bool isCalledOnInterval) {
-    using ::android::hardware::toBinder;
-    using ::android::hardware::BpHwBinder;
-    using ::android::hardware::IBinder;
-
-    if (mService == nullptr) return -1;
-
-    // this justifies the bp cast below, no in-process HALs need this
-    if (!mService->isRemote()) return -1;
-
-    sp<IBinder> binder = toBinder(mService);
-    if (binder == nullptr) return -1;
-
-    sp<BpHwBinder> bpBinder = static_cast<BpHwBinder*>(binder.get());
-    ssize_t count = bpBinder->getNodeStrongRefCount();
+    ssize_t count = getNodeStrongRefCount();
 
     // binder driver doesn't support this feature
     if (count == -1) return count;
@@ -170,6 +157,23 @@ std::string HidlService::string() const {
     std::stringstream ss;
     ss << mInterfaceName << "/" << mInstanceName;
     return ss.str();
+}
+
+ssize_t HidlService::getNodeStrongRefCount() {
+    using ::android::hardware::toBinder;
+    using ::android::hardware::BpHwBinder;
+    using ::android::hardware::IBinder;
+
+    if (mService == nullptr) return -1;
+
+    // this justifies the bp cast below, no in-process HALs need this
+    if (!mService->isRemote()) return -1;
+
+    sp<IBinder> binder = toBinder(mService);
+    if (binder == nullptr) return -1;
+
+    sp<BpHwBinder> bpBinder = static_cast<BpHwBinder*>(binder.get());
+    return bpBinder->getNodeStrongRefCount();
 }
 
 void HidlService::sendRegistrationNotifications() {

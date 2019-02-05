@@ -92,3 +92,19 @@ cc_binary {
         "libtokenmanager",
     ],
 }
+
+cc_test {
+    name: "hwservicemanager_test",
+    defaults: [
+        "hwservicemanager_defaults",
+        "libhwservicemanager_shared_libs",
+    ],
+    static_libs: [
+        "libgmock",
+        "libhwservicemanager",
+    ],
+    srcs: [
+        "test_lazy.cpp",
+    ],
+    test_suites: ["device-tests"],
+}
